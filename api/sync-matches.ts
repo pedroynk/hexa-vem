@@ -93,9 +93,7 @@ async function fetchJson<T>(url: string, init: RequestInit, sourceName: string):
   try {
     response = await fetch(url, init);
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : `Erro de rede ao consultar ${sourceName}.`, {
-      cause: error,
-    });
+    throw new Error(error instanceof Error ? error.message : `Erro de rede ao consultar ${sourceName}.`);
   }
 
   if (!response.ok) {
