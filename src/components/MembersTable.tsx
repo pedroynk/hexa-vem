@@ -30,7 +30,7 @@ export function MembersTable({ members, matches = [], guesses = [] }: MembersTab
         <thead>
           <tr>
             <th>Participante</th>
-            <th>Papel</th>
+            <th>Função</th>
             <th>Status</th>
             <th>Valor pago</th>
             <th>Pagamento</th>
