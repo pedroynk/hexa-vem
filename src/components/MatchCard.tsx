@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { Guess, PoolMatch, PoolMatchWinner, UUID } from '../types';
+import { listHeadToHeadMatches } from '../services/head-to-head.service';
+import type { Guess, HeadToHeadMatch, PoolMatch, PoolMatchEntry, PoolMatchGuess, PoolMatchWinner, UUID } from '../types';
 import { formatCurrency, formatDateTime, hasMatchStarted } from '../utils/date';
 import { GuessForm } from './GuessForm';
 
@@ -7,8 +8,11 @@ type MatchCardProps = {
   match: PoolMatch;
   guess?: Guess;
   guessesCount: number;
+  matchGuesses: PoolMatchGuess[];
   participantsCount: number;
   currentUserId: UUID;
+  userEntry?: PoolMatchEntry;
+  accumulatedValue: number;
   winners: PoolMatchWinner[];
   onSaveGuess: (matchId: string, homeGoals: number, awayGoals: number) => Promise<void>;
 };
@@ -90,13 +94,64 @@ function formatCloseTime(startDate: string): string {
   return `Fecha em ${diffInDays} ${diffInDays === 1 ? 'dia' : 'dias'}`;
 }
 
-export function MatchCard({ match, guess, guessesCount, participantsCount, currentUserId, winners, onSaveGuess }: MatchCardProps) {
+function getCazeTvUrl(match: PoolMatch): string {
+  const query = new URLSearchParams({
+    query: `CazéTV ${match.home} x ${match.away} ${match.championship}`,
+  });
+
+  return `https://www.youtube.com/@CazeTV/search?${query.toString()}`;
+}
+
+function formatHeadToHeadScore(match: HeadToHeadMatch): string {
+  const home = match.home_goals ?? '-';
+  const away = match.away_goals ?? '-';
+
+  return `${home} x ${away}`;
+}
+
+export function MatchCard({
+  match,
+  guess,
+  guessesCount,
+  matchGuesses,
+  participantsCount,
+  currentUserId,
+  userEntry,
+  accumulatedValue,
+  winners,
+  onSaveGuess,
+}: MatchCardProps) {
   const [showWinners, setShowWinners] = useState(false);
+  const [showGuesses, setShowGuesses] = useState(false);
+  const [showHeadToHead, setShowHeadToHead] = useState(false);
+  const [headToHeadMatches, setHeadToHeadMatches] = useState<HeadToHeadMatch[]>([]);
+  const [headToHeadLoading, setHeadToHeadLoading] = useState(false);
+  const [headToHeadError, setHeadToHeadError] = useState<string | null>(null);
   const locked = hasMatchStarted(match.start_date) || match.status !== 'AGENDADO';
   const matchId = match.match_id ?? match.id;
   const guessesLabel = participantsCount > 0 ? `${guessesCount}/${participantsCount}` : String(guessesCount);
   const finished = match.status === 'ENCERRADO';
   const currentUserWinner = winners.find((winner) => winner.user_id === currentUserId);
+  const userEntryStatus = userEntry?.status ?? 'PENDENTE';
+
+  async function handleToggleHeadToHead() {
+    const nextShowHeadToHead = !showHeadToHead;
+    setShowHeadToHead(nextShowHeadToHead);
+
+    if (!nextShowHeadToHead || headToHeadMatches.length > 0 || headToHeadLoading) {
+      return;
+    }
+
+    try {
+      setHeadToHeadLoading(true);
+      setHeadToHeadError(null);
+      setHeadToHeadMatches(await listHeadToHeadMatches(match.home, match.away));
+    } catch (error) {
+      setHeadToHeadError(error instanceof Error ? error.message : 'Erro ao carregar confrontos.');
+    } finally {
+      setHeadToHeadLoading(false);
+    }
+  }
 
   return (
     <article className="card match-card">
@@ -130,6 +185,25 @@ export function MatchCard({ match, guess, guessesCount, participantsCount, curre
         </div>
       </div>
 
+      {locked ? <div className="match-locked-banner">Palpites encerrados para este jogo.</div> : null}
+
+      <div className="user-match-state">
+        <div>
+          <span className="muted">Sua entrada</span>
+          <strong className={userEntryStatus === 'PAGO' ? 'success-text' : 'warning-text'}>{userEntryStatus}</strong>
+        </div>
+        <div>
+          <span className="muted">Seu palpite</span>
+          <strong>{guess ? `${guess.home_goals} x ${guess.away_goals}` : 'Sem palpite'}</strong>
+        </div>
+        {accumulatedValue > 0 ? (
+          <div>
+            <span className="muted">Acumulado anterior</span>
+            <strong>{formatCurrency(accumulatedValue)}</strong>
+          </div>
+        ) : null}
+      </div>
+
       <div className="match-grid">
         <div>
           <span className="muted">Data</span>
@@ -156,28 +230,60 @@ export function MatchCard({ match, guess, guessesCount, participantsCount, curre
       </div>
 
       <div className="match-info-grid">
-        <div>
+        <button type="button" className="match-info-action" onClick={() => window.open(getCazeTvUrl(match), '_blank', 'noopener,noreferrer')}>
           <span className="match-info-icon" aria-hidden="true">
             ◷
           </span>
           <span className="muted">Horário</span>
           <strong>{formatMatchTime(match.start_date)}</strong>
-        </div>
-        <div>
+        </button>
+        <button type="button" className="match-info-action" onClick={() => void handleToggleHeadToHead()}>
           <span className="match-info-icon" aria-hidden="true">
             ⚔
           </span>
           <span className="muted">Confronto</span>
           <strong>{match.phase}</strong>
-        </div>
-        <div>
+        </button>
+        <button type="button" className="match-info-action" onClick={() => setShowGuesses((currentValue) => !currentValue)}>
           <span className="match-info-icon" aria-hidden="true">
             ◉
           </span>
           <span className="muted">Quem palpitou</span>
           <strong>{guessesLabel}</strong>
-        </div>
+        </button>
       </div>
+
+      {showHeadToHead ? (
+        <div className="match-panel">
+          <strong>Últimos confrontos</strong>
+          {headToHeadLoading ? <span className="muted">Carregando confrontos...</span> : null}
+          {headToHeadError ? <span className="error-text">{headToHeadError}</span> : null}
+          {!headToHeadLoading && !headToHeadError && headToHeadMatches.length === 0 ? <span className="muted">Nenhum confronto encontrado.</span> : null}
+          {headToHeadMatches.map((headToHeadMatch) => (
+            <div key={headToHeadMatch.id} className="match-panel-row">
+              <span>
+                {headToHeadMatch.home} {formatHeadToHeadScore(headToHeadMatch)} {headToHeadMatch.away}
+              </span>
+              <span className="muted">{formatDateTime(headToHeadMatch.start_date)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {showGuesses ? (
+        <div className="match-panel">
+          <strong>Palpites enviados</strong>
+          {matchGuesses.length === 0 ? <span className="muted">Ninguém palpitou ainda.</span> : null}
+          {matchGuesses.map((matchGuess) => (
+            <div key={`${matchId}-${matchGuess.user_id}`} className="match-panel-row">
+              <span>{matchGuess.display_name}</span>
+              <strong>
+                {matchGuess.home_goals} x {matchGuess.away_goals}
+              </strong>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <GuessForm
         key={`${matchId}-${guess?.home_goals ?? ''}-${guess?.away_goals ?? ''}`}

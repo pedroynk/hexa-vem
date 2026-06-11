@@ -83,6 +83,25 @@ export type PoolMatchWinner = {
   gain_value: number;
 };
 
+export type PoolMatchGuess = {
+  user_id: UUID;
+  display_name: string;
+  avatar_url?: string | null;
+  home_goals: number;
+  away_goals: number;
+};
+
+export type HeadToHeadMatch = {
+  id: string;
+  home: string;
+  away: string;
+  home_goals?: number | null;
+  away_goals?: number | null;
+  start_date: string;
+  league?: string | null;
+  season?: string | null;
+};
+
 export type Guess = {
   pool_id: UUID;
   match_id: UUID;

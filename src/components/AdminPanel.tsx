@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { addMatchToPool, checkMatchResult, listAvailableMatches, removeMatchFromPool, syncMatchesFromApi } from '../services/matches.service';
 import { confirmMatchEntryPayment, listPoolMatchEntries, undoMatchEntryPayment } from '../services/match-entries.service';
@@ -12,6 +12,7 @@ type AdminPanelProps = {
   poolMatches: PoolMatch[];
   onMembersChanged: () => Promise<void>;
   onMatchesChanged: () => Promise<void>;
+  onEntriesChanged: () => Promise<void>;
   onGuessesChanged: () => Promise<void>;
   onWinnersChanged: () => Promise<void>;
 };
@@ -28,7 +29,22 @@ function getActionErrorMessage(error: unknown): string {
   return 'Erro ao executar ação.';
 }
 
-export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMatchesChanged, onGuessesChanged, onWinnersChanged }: AdminPanelProps) {
+type ActionFeedback = {
+  id: string;
+  message: string;
+  tone: 'success' | 'error';
+};
+
+export function AdminPanel({
+  pool,
+  members,
+  poolMatches,
+  onMembersChanged,
+  onMatchesChanged,
+  onEntriesChanged,
+  onGuessesChanged,
+  onWinnersChanged,
+}: AdminPanelProps) {
   const { user } = useAuth();
   const [matches, setMatches] = useState<Match[]>([]);
   const [matchEntries, setMatchEntries] = useState<PoolMatchEntry[]>([]);
@@ -36,8 +52,12 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
   const [syncingMatches, setSyncingMatches] = useState(false);
   const [workingId, setWorkingId] = useState<string | null>(null);
   const [temporarilyRemovedUserIds, setTemporarilyRemovedUserIds] = useState<Set<UUID>>(() => new Set());
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const poolMatchIds = useMemo(() => new Set(poolMatches.map((match) => match.match_id)), [poolMatches]);
+  const availableMatches = useMemo(() => matches.filter((match) => !poolMatchIds.has(match.id)), [matches, poolMatchIds]);
+  const addedMatchesCount = matches.length - availableMatches.length;
 
   useEffect(() => {
     let active = true;
@@ -99,10 +119,13 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       setWorkingId(id);
       setError(null);
       setMessage(null);
+      setActionFeedback(null);
       const actionMessage = await action();
-      setMessage(actionMessage ?? successMessage);
+      setActionFeedback({ id, message: actionMessage ?? successMessage, tone: 'success' });
     } catch (actionError) {
-      setError(getActionErrorMessage(actionError));
+      const nextError = getActionErrorMessage(actionError);
+      setActionFeedback({ id, message: nextError, tone: 'error' });
+      setError(nextError);
     } finally {
       setWorkingId(null);
     }
@@ -117,7 +140,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       `${match.match_id}-${member.user_id}`,
       async () => {
         await confirmMatchEntryPayment(pool.id, match.match_id, member.user_id, pool.ticket_value);
-        await Promise.all([refreshMatchEntries(), onMatchesChanged()]);
+        await Promise.all([refreshMatchEntries(), onEntriesChanged(), onMatchesChanged()]);
       },
       'Entrada do jogo confirmada.',
     );
@@ -128,7 +151,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       `${match.match_id}-${member.user_id}`,
       async () => {
         await undoMatchEntryPayment(pool.id, match.match_id, member.user_id);
-        await Promise.all([refreshMatchEntries(), onMatchesChanged()]);
+        await Promise.all([refreshMatchEntries(), onEntriesChanged(), onMatchesChanged()]);
       },
       'Entrada do jogo desfeita.',
     );
@@ -150,7 +173,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       async () => {
         await removePoolMember(pool.id, member.user_id);
         setTemporarilyRemovedUserIds((currentIds) => new Set(currentIds).add(member.user_id));
-        await Promise.all([refreshMatchEntries(), onMembersChanged(), onMatchesChanged(), onGuessesChanged(), onWinnersChanged()]);
+        await Promise.all([refreshMatchEntries(), onEntriesChanged(), onMembersChanged(), onMatchesChanged(), onGuessesChanged(), onWinnersChanged()]);
       },
       'Participante removido.',
     );
@@ -166,7 +189,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
           nextIds.delete(member.user_id);
           return nextIds;
         });
-        await Promise.all([refreshMatchEntries(), onMembersChanged(), onMatchesChanged(), onGuessesChanged(), onWinnersChanged()]);
+        await Promise.all([refreshMatchEntries(), onEntriesChanged(), onMembersChanged(), onMatchesChanged(), onGuessesChanged(), onWinnersChanged()]);
       },
       'Remoção desfeita.',
     );
@@ -177,7 +200,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       match.id,
       async () => {
         await addMatchToPool(pool.id, match.id);
-        await Promise.all([refreshMatchEntries(), onMatchesChanged()]);
+        await Promise.all([refreshMatchEntries(), onEntriesChanged(), onMatchesChanged()]);
       },
       'Jogo adicionado ao bolão.',
     );
@@ -193,7 +216,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       match.match_id,
       async () => {
         await removeMatchFromPool(pool.id, match.match_id);
-        await Promise.all([refreshMatchEntries(), onMatchesChanged()]);
+        await Promise.all([refreshMatchEntries(), onEntriesChanged(), onMatchesChanged()]);
       },
       'Jogo removido do bolão.',
     );
@@ -204,7 +227,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       match.match_id,
       async () => {
         const result = await checkMatchResult(match.match_id);
-        await Promise.all([onMatchesChanged(), onWinnersChanged()]);
+        await Promise.all([onEntriesChanged(), onMatchesChanged(), onWinnersChanged()]);
         return result.message;
       },
       'Conferência finalizada.',
@@ -274,6 +297,9 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
                           </button>
                         </>
                       )}
+                      {actionFeedback?.id === member.user_id ? (
+                        <span className={`inline-feedback inline-feedback-${actionFeedback.tone}`}>{actionFeedback.message}</span>
+                      ) : null}
                     </td>
                   </tr>
                 );
@@ -286,8 +312,12 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       <section className="card">
         <div className="section-heading">
           <div>
-            <h3>Adicionar jogos</h3>
-            <p className="muted">Importe os jogos do Brasil na Copa e adicione ao bolão antes do início.</p>
+            <h3>Jogos disponíveis</h3>
+            <p className="muted">Importe jogos e escolha apenas os que ainda não estão neste bolão.</p>
+            <div className="admin-badges">
+              <span className="pill">{availableMatches.length} disponíveis</span>
+              <span className="pill">{addedMatchesCount} já adicionados</span>
+            </div>
           </div>
           <button type="button" className="button small secondary" disabled={syncingMatches} onClick={() => void handleSyncMatches()}>
             {syncingMatches ? 'Importando...' : 'Importar jogos do Brasil'}
@@ -297,9 +327,12 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
         {!loadingMatches && matches.length === 0 ? (
           <div className="empty-state">Nenhum jogo salvo ainda. Importe os jogos pela TheSportsDB primeiro.</div>
         ) : null}
-        <div className="available-matches">
-          {matches.map((match) => (
-            <div key={match.id} className="available-match">
+        {!loadingMatches && matches.length > 0 && availableMatches.length === 0 ? (
+          <div className="empty-state">Todos os jogos disponíveis já foram adicionados a este bolão.</div>
+        ) : null}
+        <div className="available-matches compact-matches">
+          {availableMatches.map((match) => (
+            <div key={match.id} className="available-match compact-match-card">
               <div>
                 <strong>
                   {match.home} x {match.away}
@@ -307,6 +340,9 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
                 <p className="muted">
                   {match.championship} · {match.phase} · {formatDateTime(match.start_date)}
                 </p>
+                {actionFeedback?.id === match.id ? (
+                  <span className={`inline-feedback inline-feedback-${actionFeedback.tone}`}>{actionFeedback.message}</span>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -322,7 +358,12 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       </section>
 
       <section className="card">
-        <h3>Jogos do bolão</h3>
+        <div className="section-heading">
+          <div>
+            <h3>Jogos do bolão</h3>
+            <p className="muted">{poolMatches.length} jogos vinculados, com pagamento separado por partida.</p>
+          </div>
+        </div>
         {poolMatches.length === 0 ? <div className="empty-state">Nenhum jogo vinculado a este bolão.</div> : null}
         <div className="available-matches">
           {poolMatches.map((match) => {
@@ -341,6 +382,9 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
                     {match.championship} · {match.phase} · {formatDateTime(match.start_date)}
                   </p>
                   <p className="muted">Em disputa: {formatCurrency(matchPrizeValue)}</p>
+                  {actionFeedback?.id === match.match_id ? (
+                    <span className={`inline-feedback inline-feedback-${actionFeedback.tone}`}>{actionFeedback.message}</span>
+                  ) : null}
                 </div>
                 <div className="actions">
                   <button
@@ -373,6 +417,9 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
                         <span>{member.display_name}</span>
                         <span className={`pill pill-${entryStatus.toLowerCase()}`}>{entryStatus}</span>
                         <strong>{formatCurrency(visibleEntryValue)}</strong>
+                        {actionFeedback?.id === entryWorkingId ? (
+                          <span className={`inline-feedback inline-feedback-${actionFeedback.tone}`}>{actionFeedback.message}</span>
+                        ) : null}
                         {entryStatus === 'PAGO' ? (
                           <button
                             type="button"

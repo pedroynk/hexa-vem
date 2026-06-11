@@ -517,8 +517,14 @@ h3 {
 }
 
 .match-card {
+  position: relative;
   display: grid;
   gap: 1rem;
+  border-color: rgba(255, 213, 0, 0.36);
+  background:
+    linear-gradient(180deg, rgba(18, 55, 109, 0.96), rgba(13, 42, 86, 0.94)),
+    var(--surface);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
 }
 
 .match-header {
@@ -550,7 +556,11 @@ h3 {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 1rem;
-  padding: 0.6rem 0;
+  border-radius: 24px;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(255, 213, 0, 0.12), transparent 18rem),
+    rgba(255, 255, 255, 0.04);
 }
 
 .match-team {
@@ -570,6 +580,31 @@ h3 {
   font-weight: 900;
 }
 
+.match-locked-banner {
+  border: 1px solid rgba(255, 213, 0, 0.45);
+  border-radius: 16px;
+  padding: 0.8rem 0.9rem;
+  background: rgba(255, 213, 0, 0.12);
+  color: var(--secondary);
+  font-weight: 900;
+  text-align: center;
+}
+
+.user-match-state {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.user-match-state > div {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid rgba(255, 213, 0, 0.22);
+  border-radius: 16px;
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.07);
+}
+
 .match-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -577,7 +612,7 @@ h3 {
 }
 
 .match-grid div,
-.match-info-grid div {
+.match-info-action {
   display: grid;
   gap: 0.25rem;
   border-radius: 16px;
@@ -591,9 +626,20 @@ h3 {
   gap: 0.65rem;
 }
 
-.match-info-grid div {
+.match-info-action {
+  border: 0;
+  color: inherit;
+  cursor: pointer;
   justify-items: center;
   text-align: center;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.match-info-action:hover {
+  background: rgba(255, 255, 255, 0.13);
+  transform: translateY(-1px);
 }
 
 .match-info-icon {
@@ -605,6 +651,25 @@ h3 {
   background: rgba(0, 157, 79, 0.24);
   color: var(--success);
   font-weight: 900;
+}
+
+.match-panel {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid rgba(255, 213, 0, 0.24);
+  border-radius: 18px;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.match-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-radius: 12px;
+  padding: 0.6rem 0.7rem;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .guess-form {
@@ -638,6 +703,10 @@ h3 {
 
 .guess-summary .success-text {
   margin-bottom: 0;
+}
+
+.warning-text {
+  color: var(--secondary);
 }
 
 .match-result-box {
@@ -783,6 +852,40 @@ h3 {
   gap: 0.75rem;
 }
 
+.compact-matches {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.compact-match-card {
+  align-items: flex-start;
+}
+
+.admin-badges {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+}
+
+.inline-feedback {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.32rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.inline-feedback-success {
+  background: rgba(68, 208, 124, 0.16);
+  color: var(--success);
+}
+
+.inline-feedback-error {
+  background: rgba(255, 107, 92, 0.16);
+  color: var(--danger);
+}
+
 .match-payment-card {
   display: grid;
   gap: 0.85rem;
@@ -803,6 +906,11 @@ h3 {
   border-radius: 14px;
   padding: 0.65rem;
   background: rgba(255, 255, 255, 0.06);
+}
+
+.match-entry-row .inline-feedback {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .available-match {
@@ -842,6 +950,11 @@ h3 {
   .match-entry-row {
     grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .match-panel-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .guess-form {

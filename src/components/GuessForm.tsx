@@ -56,22 +56,22 @@ export function GuessForm({ guess, disabled, onSubmit }: GuessFormProps) {
           </strong>
           {success ? <p className="success-text">Palpite salvo!</p> : null}
         </div>
-        <button
-          type="button"
-          className="button small ghost edit-guess-button"
-          disabled={disabled}
-          onClick={() => {
-            setHomeGoals(String(guess.home_goals));
-            setAwayGoals(String(guess.away_goals));
-            setError(null);
-            setSuccess(false);
-            setEditing(true);
-          }}
-        >
-          <span aria-hidden="true">✎</span>
-          Alterar
-        </button>
-        {disabled ? <p className="muted">Palpites bloqueados para este jogo.</p> : null}
+        {!disabled ? (
+          <button
+            type="button"
+            className="button small ghost edit-guess-button"
+            onClick={() => {
+              setHomeGoals(String(guess.home_goals));
+              setAwayGoals(String(guess.away_goals));
+              setError(null);
+              setSuccess(false);
+              setEditing(true);
+            }}
+          >
+            <span aria-hidden="true">✎</span>
+            Alterar
+          </button>
+        ) : null}
       </div>
     );
   }

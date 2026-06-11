@@ -7,13 +7,14 @@ import { MembersTable } from '../components/MembersTable';
 import { RankingTable } from '../components/RankingTable';
 import { useAuth } from '../hooks/useAuth';
 import { listPoolGuesses, upsertGuess } from '../services/guesses.service';
+import { listPoolMatchEntries } from '../services/match-entries.service';
 import { listPoolMatches } from '../services/matches.service';
 import { listPoolMembers } from '../services/members.service';
 import { getPool } from '../services/pools.service';
 import { listPoolRanking } from '../services/ranking.service';
 import { getSupabaseErrorMessage } from '../services/supabase-error';
 import { listPoolMatchWinners } from '../services/winners.service';
-import type { Guess, Pool, PoolMatch, PoolMatchWinner, PoolMember, Ranking } from '../types';
+import type { Guess, Pool, PoolMatch, PoolMatchEntry, PoolMatchGuess, PoolMatchWinner, PoolMember, Ranking } from '../types';
 import { formatCurrency } from '../utils/date';
 
 type TabId = 'matches' | 'members' | 'ranking' | 'admin';
@@ -32,6 +33,7 @@ export function PoolPage() {
   const [matches, setMatches] = useState<PoolMatch[]>([]);
   const [guesses, setGuesses] = useState<Guess[]>([]);
   const [members, setMembers] = useState<PoolMember[]>([]);
+  const [matchEntries, setMatchEntries] = useState<PoolMatchEntry[]>([]);
   const [winners, setWinners] = useState<PoolMatchWinner[]>([]);
   const [ranking, setRanking] = useState<Ranking[]>([]);
   const [rankingLoaded, setRankingLoaded] = useState(false);
@@ -56,6 +58,43 @@ export function PoolPage() {
 
     return counts;
   }, [guesses]);
+  const guessDetailsByMatchId = useMemo(() => {
+    const membersById = new Map(members.map((member) => [member.user_id, member]));
+    const groupedGuesses = new Map<string, PoolMatchGuess[]>();
+
+    for (const currentGuess of guesses) {
+      const member = membersById.get(currentGuess.user_id);
+      const matchGuesses = groupedGuesses.get(currentGuess.match_id) ?? [];
+
+      matchGuesses.push({
+        user_id: currentGuess.user_id,
+        display_name: member?.display_name ?? `Usuario ${currentGuess.user_id.slice(0, 8)}`,
+        avatar_url: member?.avatar_url ?? null,
+        home_goals: currentGuess.home_goals,
+        away_goals: currentGuess.away_goals,
+      });
+      groupedGuesses.set(currentGuess.match_id, matchGuesses);
+    }
+
+    return groupedGuesses;
+  }, [guesses, members]);
+  const currentUserEntryByMatchId = useMemo(
+    () => new Map(matchEntries.filter((entry) => entry.user_id === user?.id).map((entry) => [entry.match_id, entry])),
+    [matchEntries, user?.id],
+  );
+  const paidTotalByMatchId = useMemo(() => {
+    const totals = new Map<string, number>();
+
+    for (const entry of matchEntries) {
+      if (entry.status !== 'PAGO') {
+        continue;
+      }
+
+      totals.set(entry.match_id, (totals.get(entry.match_id) ?? 0) + entry.paid_value);
+    }
+
+    return totals;
+  }, [matchEntries]);
   const winnersByMatchId = useMemo(() => {
     const groupedWinners = new Map<string, PoolMatchWinner[]>();
 
@@ -97,6 +136,14 @@ export function PoolPage() {
     setGuesses(await listPoolGuesses(poolId, user.id));
   }
 
+  async function refreshMatchEntries() {
+    if (!poolId) {
+      return;
+    }
+
+    setMatchEntries(await listPoolMatchEntries(poolId));
+  }
+
   async function refreshWinners(nextMembers = members) {
     if (!poolId) {
       return;
@@ -119,11 +166,12 @@ export function PoolPage() {
         setLoading(true);
         setError(null);
         setWarning(null);
-        const [poolResult, matchesResult, membersResult, guessesResult] = await Promise.allSettled([
+        const [poolResult, matchesResult, membersResult, guessesResult, entriesResult] = await Promise.allSettled([
           getPool(currentPoolId),
           listPoolMatches(currentPoolId),
           listPoolMembers(currentPoolId),
           listPoolGuesses(currentPoolId, currentUserId),
+          listPoolMatchEntries(currentPoolId),
         ]);
 
         if (poolResult.status === 'rejected' || matchesResult.status === 'rejected') {
@@ -145,9 +193,10 @@ export function PoolPage() {
           setMatches(matchesResult.value);
           setMembers(loadedMembers);
           setGuesses(guessesResult.status === 'fulfilled' ? guessesResult.value : []);
+          setMatchEntries(entriesResult.status === 'fulfilled' ? entriesResult.value : []);
           setWinners(await listPoolMatchWinners(currentPoolId, loadedMembers));
 
-          const optionalErrors = [membersResult, guessesResult]
+          const optionalErrors = [membersResult, guessesResult, entriesResult]
             .filter((result) => result.status === 'rejected')
             .map((result) => getSupabaseErrorMessage(result.reason));
 
@@ -211,7 +260,7 @@ export function PoolPage() {
     }
 
     await upsertGuess(poolId, matchId, homeGoals, awayGoals);
-    await refreshGuesses();
+    await Promise.all([refreshGuesses(), refreshMatchEntries()]);
   }
 
   if (!poolId || !user) {
@@ -273,8 +322,11 @@ export function PoolPage() {
               match={match}
               guess={guessesByMatchId.get(match.match_id ?? match.id)}
               guessesCount={guessesCountByMatchId.get(match.match_id ?? match.id) ?? 0}
+              matchGuesses={guessDetailsByMatchId.get(match.match_id ?? match.id) ?? []}
               participantsCount={members.length}
               currentUserId={user.id}
+              userEntry={currentUserEntryByMatchId.get(match.match_id ?? match.id)}
+              accumulatedValue={Math.max(0, (match.prize_value ?? 0) - (paidTotalByMatchId.get(match.match_id ?? match.id) ?? 0))}
               winners={winnersByMatchId.get(match.match_id ?? match.id) ?? []}
               onSaveGuess={handleSaveGuess}
             />
@@ -284,7 +336,14 @@ export function PoolPage() {
 
       {visibleActiveTab === 'members' ? <MembersTable members={members} matches={matchesWithPrize} guesses={guesses} /> : null}
       {visibleActiveTab === 'ranking' ? (
-        rankingLoading ? <div className="center-card">Carregando ranking...</div> : <RankingTable ranking={ranking} />
+        <>
+          {(pool.current_accumulated ?? 0) > 0 ? (
+            <div className="warning-box">
+              Acumulado aguardando próximo jogo: {formatCurrency(pool.current_accumulated ?? 0)}.
+            </div>
+          ) : null}
+          {rankingLoading ? <div className="center-card">Carregando ranking...</div> : <RankingTable ranking={ranking} />}
+        </>
       ) : null}
       {visibleActiveTab === 'admin' && isAdmin ? (
         <AdminPanel
@@ -293,6 +352,7 @@ export function PoolPage() {
           poolMatches={matchesWithPrize}
           onMembersChanged={refreshMembers}
           onMatchesChanged={refreshMatches}
+          onEntriesChanged={refreshMatchEntries}
           onGuessesChanged={refreshGuesses}
           onWinnersChanged={refreshWinners}
         />

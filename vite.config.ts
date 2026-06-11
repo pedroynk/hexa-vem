@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, type Plugin, type ViteDevServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import syncMatchesHandler from './api/sync-matches';
 import checkMatchResultHandler from './api/check-match-result';
+import headToHeadHandler from './api/head-to-head';
 
 type LocalHandler = typeof syncMatchesHandler;
 
@@ -50,6 +51,7 @@ function localApiPlugin(): Plugin {
     configureServer(server) {
       registerJsonApiRoute(server, '/api/sync-matches', syncMatchesHandler);
       registerJsonApiRoute(server, '/api/check-match-result', checkMatchResultHandler);
+      registerJsonApiRoute(server, '/api/head-to-head', headToHeadHandler);
     },
   };
 }

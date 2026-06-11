@@ -83,12 +83,14 @@ function mapTheSportsDbStatusToMatchStatus(event: TheSportsDbEvent): MatchStatus
 }
 
 function getStartDate(event: TheSportsDbEvent): string {
-  if (event.strTimestamp) return event.strTimestamp;
+  if (event.strTimestamp) return new Date(event.strTimestamp).toISOString();
 
   const date = event.dateEvent ?? new Date().toISOString().slice(0, 10);
-  const time = event.strTime?.replace('+00:00', '') ?? '00:00:00';
+  const rawTime = event.strTime?.trim() ?? '00:00:00';
+  const time = /(?:z|[+-]\d{2}:?\d{2})$/i.test(rawTime) ? rawTime : `${rawTime}Z`;
+  const parsedDate = new Date(`${date}T${time}`);
 
-  return `${date}T${time}`;
+  return Number.isNaN(parsedDate.getTime()) ? `${date}T${rawTime}` : parsedDate.toISOString();
 }
 
 async function parseJsonResponse<T>(apiResponse: Response, sourceName: string): Promise<T> {
