@@ -53,10 +53,11 @@ type TheSportsDbResponse = {
 };
 
 const THE_SPORTS_DB_BASE_URL = 'https://www.thesportsdb.com/api/v1/json';
-const DEFAULT_THE_SPORTS_DB_BRAZIL_TEAM_ID = '134496';
-const DEFAULT_THE_SPORTS_DB_TEAM_NAME = 'Brazil';
+const DEFAULT_THE_SPORTS_DB_TARGET_TEAM_ID = '134497';
+const DEFAULT_THE_SPORTS_DB_TEAM_NAME = 'Mexico';
 const DEFAULT_THE_SPORTS_DB_WORLD_CUP_LEAGUE_ID = '4429';
 const DEFAULT_THE_SPORTS_DB_WORLD_CUP_SEASON = '2026';
+const DEFAULT_THE_SPORTS_DB_TEAM_ALIASES = ['Mexico', 'México'];
 
 function firstQueryValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -152,17 +153,46 @@ function getStartDate(event: TheSportsDbEvent): string {
   return `${date}T${time}`;
 }
 
+function normalizeSearchTerm(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function getTeamSearchTerms(request: ApiRequest): string[] {
+  const queryTeamName = firstQueryValue(request.query?.teamName);
+  const teamName = queryTeamName ?? process.env.THE_SPORTS_DB_TEAM_NAME ?? DEFAULT_THE_SPORTS_DB_TEAM_NAME;
+
+  return [...new Set([teamName, ...DEFAULT_THE_SPORTS_DB_TEAM_ALIASES].map(normalizeSearchTerm).filter(Boolean))];
+}
+
 function getTheSportsDbUrls(request: ApiRequest, apiKey: string): string[] {
   const query = request.query ?? {};
 
   const endpoint = firstQueryValue(query.endpoint) ?? 'brazil-world-cup';
-  const team = firstQueryValue(query.team) ?? process.env.THE_SPORTS_DB_TEAM_ID ?? DEFAULT_THE_SPORTS_DB_BRAZIL_TEAM_ID;
+  const team = firstQueryValue(query.team) ?? process.env.THE_SPORTS_DB_TEAM_ID ?? DEFAULT_THE_SPORTS_DB_TARGET_TEAM_ID;
   const defaultLeague = endpoint === 'brazil-world-cup' ? DEFAULT_THE_SPORTS_DB_WORLD_CUP_LEAGUE_ID : undefined;
   const defaultSeason = endpoint === 'brazil-world-cup' ? DEFAULT_THE_SPORTS_DB_WORLD_CUP_SEASON : undefined;
   const league = firstQueryValue(query.league) ?? process.env.THE_SPORTS_DB_LEAGUE_ID ?? defaultLeague;
   const season = firstQueryValue(query.season) ?? process.env.THE_SPORTS_DB_SEASON ?? defaultSeason;
 
   const base = `${THE_SPORTS_DB_BASE_URL}/${apiKey}`;
+
+  if (endpoint === 'brazil-world-cup') {
+    const urls = [`${base}/eventsnext.php?id=${encodeURIComponent(team)}`, `${base}/eventslast.php?id=${encodeURIComponent(team)}`];
+
+    if (league && season) {
+      urls.push(`${base}/eventsseason.php?id=${encodeURIComponent(league)}&s=${encodeURIComponent(season)}`);
+    }
+
+    if (league) {
+      urls.push(`${base}/eventsnextleague.php?id=${encodeURIComponent(league)}`);
+    }
+
+    return urls;
+  }
 
   if (endpoint === 'team-last') {
     return [`${base}/eventslast.php?id=${encodeURIComponent(team)}`];
@@ -178,13 +208,9 @@ function getTheSportsDbUrls(request: ApiRequest, apiKey: string): string[] {
     return [`${base}/eventspastleague.php?id=${encodeURIComponent(league)}`];
   }
 
-  if (endpoint === 'season' || endpoint === 'brazil-world-cup') {
+  if (endpoint === 'season') {
     if (league && season) {
       return [`${base}/eventsseason.php?id=${encodeURIComponent(league)}&s=${encodeURIComponent(season)}`];
-    }
-
-    if (endpoint === 'brazil-world-cup') {
-      return [`${base}/eventsnext.php?id=${encodeURIComponent(team)}`, `${base}/eventslast.php?id=${encodeURIComponent(team)}`];
     }
 
     throw new Error('Informe league/THE_SPORTS_DB_LEAGUE_ID e season/THE_SPORTS_DB_SEASON.');
@@ -195,7 +221,7 @@ function getTheSportsDbUrls(request: ApiRequest, apiKey: string): string[] {
 
 async function fetchTheSportsDbFixtures(request: ApiRequest, apiKey: string): Promise<SyncedMatch[]> {
   const endpoint = firstQueryValue(request.query?.endpoint) ?? 'brazil-world-cup';
-  const teamName = (firstQueryValue(request.query?.teamName) ?? process.env.THE_SPORTS_DB_TEAM_NAME ?? DEFAULT_THE_SPORTS_DB_TEAM_NAME).toLowerCase();
+  const teamSearchTerms = getTeamSearchTerms(request);
   const payloads = await Promise.all(getTheSportsDbUrls(request, apiKey).map((url) => fetchJson<TheSportsDbResponse>(url, {}, 'TheSportsDB')));
   const eventsById = new Map<string, TheSportsDbEvent>();
 
@@ -207,9 +233,9 @@ async function fetchTheSportsDbFixtures(request: ApiRequest, apiKey: string): Pr
   const filteredEvents =
     endpoint === 'brazil-world-cup' || endpoint === 'season'
       ? events.filter((event) => {
-          const home = (event.strHomeTeam ?? '').toLowerCase();
-          const away = (event.strAwayTeam ?? '').toLowerCase();
-          return home.includes(teamName) || away.includes(teamName);
+          const home = normalizeSearchTerm(event.strHomeTeam ?? '');
+          const away = normalizeSearchTerm(event.strAwayTeam ?? '');
+          return teamSearchTerms.some((teamName) => home.includes(teamName) || away.includes(teamName));
         })
       : events;
 

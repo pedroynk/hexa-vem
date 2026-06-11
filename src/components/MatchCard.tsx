@@ -1,4 +1,5 @@
-import type { Guess, PoolMatch } from '../types';
+import { useState } from 'react';
+import type { Guess, PoolMatch, PoolMatchWinner, UUID } from '../types';
 import { formatCurrency, formatDateTime, hasMatchStarted } from '../utils/date';
 import { GuessForm } from './GuessForm';
 
@@ -7,6 +8,8 @@ type MatchCardProps = {
   guess?: Guess;
   guessesCount: number;
   participantsCount: number;
+  currentUserId: UUID;
+  winners: PoolMatchWinner[];
   onSaveGuess: (matchId: string, homeGoals: number, awayGoals: number) => Promise<void>;
 };
 
@@ -87,10 +90,13 @@ function formatCloseTime(startDate: string): string {
   return `Fecha em ${diffInDays} ${diffInDays === 1 ? 'dia' : 'dias'}`;
 }
 
-export function MatchCard({ match, guess, guessesCount, participantsCount, onSaveGuess }: MatchCardProps) {
+export function MatchCard({ match, guess, guessesCount, participantsCount, currentUserId, winners, onSaveGuess }: MatchCardProps) {
+  const [showWinners, setShowWinners] = useState(false);
   const locked = hasMatchStarted(match.start_date) || match.status !== 'AGENDADO';
   const matchId = match.match_id ?? match.id;
   const guessesLabel = participantsCount > 0 ? `${guessesCount}/${participantsCount}` : String(guessesCount);
+  const finished = match.status === 'ENCERRADO';
+  const currentUserWinner = winners.find((winner) => winner.user_id === currentUserId);
 
   return (
     <article className="card match-card">
@@ -179,6 +185,39 @@ export function MatchCard({ match, guess, guessesCount, participantsCount, onSav
         disabled={locked}
         onSubmit={(homeGoals, awayGoals) => onSaveGuess(matchId, homeGoals, awayGoals)}
       />
+
+      {finished ? (
+        <div className={`match-result-box ${currentUserWinner ? 'match-result-win' : 'match-result-loss'}`}>
+          <div>
+            <span className="muted">Seu resultado</span>
+            <strong>
+              {currentUserWinner
+                ? `Você ganhou ${formatCurrency(currentUserWinner.gain_value)}`
+                : guess
+                  ? 'Você perdeu este jogo.'
+                  : 'Você não palpitou neste jogo.'}
+            </strong>
+          </div>
+          {winners.length > 0 ? (
+            <button type="button" className="button small ghost" onClick={() => setShowWinners((currentValue) => !currentValue)}>
+              {showWinners ? 'Ocultar vencedores' : 'Ver vencedores'}
+            </button>
+          ) : (
+            <span className="muted">Nenhum vencedor.</span>
+          )}
+
+          {showWinners ? (
+            <div className="winner-list">
+              {winners.map((winner) => (
+                <div key={`${winner.match_id}-${winner.user_id}`} className="winner-row">
+                  <span>{winner.display_name}</span>
+                  <strong>{formatCurrency(winner.gain_value)}</strong>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }

@@ -63,6 +63,26 @@ export type PoolMatch = Match & {
   ticket_value?: number | null;
 };
 
+export type PoolMatchEntry = {
+  pool_id: UUID;
+  match_id: UUID;
+  user_id: UUID;
+  display_name: string;
+  avatar_url?: string | null;
+  status: MemberStatus;
+  paid_value: number;
+  paid_at?: string | null;
+};
+
+export type PoolMatchWinner = {
+  pool_id: UUID;
+  match_id: UUID;
+  user_id: UUID;
+  display_name: string;
+  avatar_url?: string | null;
+  gain_value: number;
+};
+
 export type Guess = {
   pool_id: UUID;
   match_id: UUID;

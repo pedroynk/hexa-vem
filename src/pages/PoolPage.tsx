@@ -12,7 +12,8 @@ import { listPoolMembers } from '../services/members.service';
 import { getPool } from '../services/pools.service';
 import { listPoolRanking } from '../services/ranking.service';
 import { getSupabaseErrorMessage } from '../services/supabase-error';
-import type { Guess, Pool, PoolMatch, PoolMember, Ranking } from '../types';
+import { listPoolMatchWinners } from '../services/winners.service';
+import type { Guess, Pool, PoolMatch, PoolMatchWinner, PoolMember, Ranking } from '../types';
 import { formatCurrency } from '../utils/date';
 
 type TabId = 'matches' | 'members' | 'ranking' | 'admin';
@@ -31,6 +32,7 @@ export function PoolPage() {
   const [matches, setMatches] = useState<PoolMatch[]>([]);
   const [guesses, setGuesses] = useState<Guess[]>([]);
   const [members, setMembers] = useState<PoolMember[]>([]);
+  const [winners, setWinners] = useState<PoolMatchWinner[]>([]);
   const [ranking, setRanking] = useState<Ranking[]>([]);
   const [rankingLoaded, setRankingLoaded] = useState(false);
   const [rankingLoading, setRankingLoading] = useState(false);
@@ -54,20 +56,24 @@ export function PoolPage() {
 
     return counts;
   }, [guesses]);
-  const livePrizeValue = useMemo(() => {
-    const paidTotal = members
-      .filter((member) => member.status === 'PAGO')
-      .reduce((total, member) => total + (member.paid_value > 0 ? member.paid_value : (pool?.ticket_value ?? 0)), 0);
+  const winnersByMatchId = useMemo(() => {
+    const groupedWinners = new Map<string, PoolMatchWinner[]>();
 
-    return paidTotal + (pool?.current_accumulated ?? 0);
-  }, [members, pool?.current_accumulated, pool?.ticket_value]);
+    for (const winner of winners) {
+      const matchWinners = groupedWinners.get(winner.match_id) ?? [];
+      matchWinners.push(winner);
+      groupedWinners.set(winner.match_id, matchWinners);
+    }
+
+    return groupedWinners;
+  }, [winners]);
   const matchesWithPrize = useMemo(
     () =>
       matches.map((match) => ({
         ...match,
-        prize_value: match.prize_value && match.prize_value > 0 ? match.prize_value : livePrizeValue,
+        prize_value: match.prize_value ?? 0,
       })),
-    [livePrizeValue, matches],
+    [matches],
   );
 
   async function refreshMatches() {
@@ -89,6 +95,14 @@ export function PoolPage() {
       return;
     }
     setGuesses(await listPoolGuesses(poolId, user.id));
+  }
+
+  async function refreshWinners(nextMembers = members) {
+    if (!poolId) {
+      return;
+    }
+
+    setWinners(await listPoolMatchWinners(poolId, nextMembers));
   }
 
   useEffect(() => {
@@ -125,10 +139,13 @@ export function PoolPage() {
         }
 
         if (active) {
+          const loadedMembers = membersResult.status === 'fulfilled' ? membersResult.value : [];
+
           setPool(poolResult.value);
           setMatches(matchesResult.value);
-          setMembers(membersResult.status === 'fulfilled' ? membersResult.value : []);
+          setMembers(loadedMembers);
           setGuesses(guessesResult.status === 'fulfilled' ? guessesResult.value : []);
+          setWinners(await listPoolMatchWinners(currentPoolId, loadedMembers));
 
           const optionalErrors = [membersResult, guessesResult]
             .filter((result) => result.status === 'rejected')
@@ -227,7 +244,7 @@ export function PoolPage() {
         <div>
           <p className="eyebrow">Código {pool.code}</p>
           <h1>{pool.name}</h1>
-          <p className="muted">Entrada: {formatCurrency(pool.ticket_value)}</p>
+          <p className="muted">Entrada por jogo: {formatCurrency(pool.ticket_value)}</p>
         </div>
         <span className="pill">{pool.status}</span>
       </div>
@@ -257,6 +274,8 @@ export function PoolPage() {
               guess={guessesByMatchId.get(match.match_id ?? match.id)}
               guessesCount={guessesCountByMatchId.get(match.match_id ?? match.id) ?? 0}
               participantsCount={members.length}
+              currentUserId={user.id}
+              winners={winnersByMatchId.get(match.match_id ?? match.id) ?? []}
               onSaveGuess={handleSaveGuess}
             />
           ))}
@@ -274,6 +293,7 @@ export function PoolPage() {
           poolMatches={matchesWithPrize}
           onMembersChanged={refreshMembers}
           onMatchesChanged={refreshMatches}
+          onWinnersChanged={refreshWinners}
         />
       ) : null}
     </Layout>

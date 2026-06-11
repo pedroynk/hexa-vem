@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { addMatchToPool, checkMatchResult, listAvailableMatches, removeMatchFromPool, syncMatchesFromApi } from '../services/matches.service';
-import { confirmMemberPayment, removePoolMember, restorePoolMember, undoMemberPayment } from '../services/members.service';
-import type { Match, Pool, PoolMatch, PoolMember, UUID } from '../types';
+import { confirmMatchEntryPayment, listPoolMatchEntries, undoMatchEntryPayment } from '../services/match-entries.service';
+import { removePoolMember, restorePoolMember } from '../services/members.service';
+import type { Match, Pool, PoolMatch, PoolMatchEntry, PoolMember, UUID } from '../types';
 import { formatCurrency, formatDateTime } from '../utils/date';
 
 type AdminPanelProps = {
@@ -11,14 +12,28 @@ type AdminPanelProps = {
   poolMatches: PoolMatch[];
   onMembersChanged: () => Promise<void>;
   onMatchesChanged: () => Promise<void>;
+  onWinnersChanged: () => Promise<void>;
 };
 
-export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMatchesChanged }: AdminPanelProps) {
+function getActionErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    return JSON.stringify(error);
+  }
+
+  return 'Erro ao executar ação.';
+}
+
+export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMatchesChanged, onWinnersChanged }: AdminPanelProps) {
   const { user } = useAuth();
   const [matches, setMatches] = useState<Match[]>([]);
+  const [matchEntries, setMatchEntries] = useState<PoolMatchEntry[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(true);
   const [syncingMatches, setSyncingMatches] = useState(false);
-  const [workingId, setWorkingId] = useState<UUID | null>(null);
+  const [workingId, setWorkingId] = useState<string | null>(null);
   const [temporarilyRemovedUserIds, setTemporarilyRemovedUserIds] = useState<Set<UUID>>(() => new Set());
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +66,34 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
     };
   }, []);
 
-  async function runAction(id: UUID, action: () => Promise<string | void>, successMessage: string) {
+  async function refreshMatchEntries() {
+    setMatchEntries(await listPoolMatchEntries(pool.id));
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadMatchEntries() {
+      try {
+        const entries = await listPoolMatchEntries(pool.id);
+        if (active) {
+          setMatchEntries(entries);
+        }
+      } catch (loadError) {
+        if (active) {
+          setError(loadError instanceof Error ? loadError.message : 'Erro ao buscar pagamentos por jogo.');
+        }
+      }
+    }
+
+    void loadMatchEntries();
+
+    return () => {
+      active = false;
+    };
+  }, [pool.id, poolMatches.length, members.length]);
+
+  async function runAction(id: string, action: () => Promise<string | void>, successMessage: string) {
     try {
       setWorkingId(id);
       setError(null);
@@ -59,31 +101,35 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       const actionMessage = await action();
       setMessage(actionMessage ?? successMessage);
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Erro ao executar ação.');
+      setError(getActionErrorMessage(actionError));
     } finally {
       setWorkingId(null);
     }
   }
 
-  async function handleConfirmPayment(member: PoolMember) {
+  function getMatchEntry(matchId: UUID, userId: UUID): PoolMatchEntry | undefined {
+    return matchEntries.find((entry) => entry.match_id === matchId && entry.user_id === userId);
+  }
+
+  async function handleConfirmEntryPayment(match: PoolMatch, member: PoolMember) {
     await runAction(
-      member.user_id,
+      `${match.match_id}-${member.user_id}`,
       async () => {
-        await confirmMemberPayment(pool.id, member.user_id, pool.ticket_value);
-        await Promise.all([onMembersChanged(), onMatchesChanged()]);
+        await confirmMatchEntryPayment(pool.id, match.match_id, member.user_id, pool.ticket_value);
+        await Promise.all([refreshMatchEntries(), onMatchesChanged()]);
       },
-      'Pagamento confirmado.',
+      'Entrada do jogo confirmada.',
     );
   }
 
-  async function handleUndoPayment(member: PoolMember) {
+  async function handleUndoEntryPayment(match: PoolMatch, member: PoolMember) {
     await runAction(
-      member.user_id,
+      `${match.match_id}-${member.user_id}`,
       async () => {
-        await undoMemberPayment(pool.id, member.user_id);
-        await Promise.all([onMembersChanged(), onMatchesChanged()]);
+        await undoMatchEntryPayment(pool.id, match.match_id, member.user_id);
+        await Promise.all([refreshMatchEntries(), onMatchesChanged()]);
       },
-      'Pagamento desfeito.',
+      'Entrada do jogo desfeita.',
     );
   }
 
@@ -130,7 +176,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       match.id,
       async () => {
         await addMatchToPool(pool.id, match.id);
-        await onMatchesChanged();
+        await Promise.all([refreshMatchEntries(), onMatchesChanged()]);
       },
       'Jogo adicionado ao bolão.',
     );
@@ -146,7 +192,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       match.match_id,
       async () => {
         await removeMatchFromPool(pool.id, match.match_id);
-        await onMatchesChanged();
+        await Promise.all([refreshMatchEntries(), onMatchesChanged()]);
       },
       'Jogo removido do bolão.',
     );
@@ -157,7 +203,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       match.match_id,
       async () => {
         const result = await checkMatchResult(match.match_id);
-        await onMatchesChanged();
+        await Promise.all([onMatchesChanged(), onWinnersChanged()]);
         return result.message;
       },
       'Conferência finalizada.',
@@ -190,7 +236,6 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
               <tr>
                 <th>Nome</th>
                 <th>Status</th>
-                <th>Pago</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -206,7 +251,6 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
                       {member.display_name} {isCurrentUser ? <span className="muted">(você)</span> : null}
                     </td>
                     <td>{visibleStatus}</td>
-                    <td>{formatCurrency(isTemporarilyRemoved ? 0 : (member.paid_value ?? 0))}</td>
                     <td className="actions">
                       {isTemporarilyRemoved ? (
                         <button
@@ -219,25 +263,6 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
                         </button>
                       ) : (
                         <>
-                          {member.status === 'PAGO' ? (
-                            <button
-                              type="button"
-                              className="button small ghost"
-                              disabled={workingId === member.user_id}
-                              onClick={() => void handleUndoPayment(member)}
-                            >
-                              Desfazer pagamento
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="button small"
-                              disabled={workingId === member.user_id}
-                              onClick={() => void handleConfirmPayment(member)}
-                            >
-                              Confirmar pagamento
-                            </button>
-                          )}
                           <button
                             type="button"
                             className="button small danger"
@@ -299,34 +324,80 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
         <h3>Jogos do bolão</h3>
         {poolMatches.length === 0 ? <div className="empty-state">Nenhum jogo vinculado a este bolão.</div> : null}
         <div className="available-matches">
-          {poolMatches.map((match) => (
-            <div key={match.match_id} className="available-match">
-              <div>
-                <strong>
-                  {match.home} x {match.away}
-                </strong>
-                <p className="muted">
-                  {match.championship} · {match.phase} · {formatDateTime(match.start_date)}
-                </p>
+          {poolMatches.map((match) => {
+            const activeMembers = members.filter((member) => member.status !== 'REMOVIDO' && !temporarilyRemovedUserIds.has(member.user_id));
+            const matchPrizeValue = matchEntries
+              .filter((entry) => entry.match_id === match.match_id && entry.status === 'PAGO')
+              .reduce((total, entry) => total + entry.paid_value, 0);
+
+            return (
+              <div key={match.match_id} className="available-match match-payment-card">
+                <div>
+                  <strong>
+                    {match.home} x {match.away}
+                  </strong>
+                  <p className="muted">
+                    {match.championship} · {match.phase} · {formatDateTime(match.start_date)}
+                  </p>
+                  <p className="muted">Em disputa: {formatCurrency(matchPrizeValue)}</p>
+                </div>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="button small danger"
+                    disabled={workingId === match.match_id}
+                    onClick={() => void handleRemoveMatch(match)}
+                  >
+                    Remover
+                  </button>
+                  <button
+                    type="button"
+                    className="button small secondary"
+                    disabled={workingId === match.match_id}
+                    onClick={() => void handleCheckResult(match)}
+                  >
+                    Conferir resultado
+                  </button>
+                </div>
+
+                <div className="match-entry-list">
+                  {activeMembers.map((member) => {
+                    const entry = getMatchEntry(match.match_id, member.user_id);
+                    const entryStatus = entry?.status ?? 'PENDENTE';
+                    const entryWorkingId = `${match.match_id}-${member.user_id}`;
+                    const visibleEntryValue = entryStatus === 'PAGO' ? (entry?.paid_value ?? pool.ticket_value) : pool.ticket_value;
+
+                    return (
+                      <div key={entryWorkingId} className="match-entry-row">
+                        <span>{member.display_name}</span>
+                        <span className={`pill pill-${entryStatus.toLowerCase()}`}>{entryStatus}</span>
+                        <strong>{formatCurrency(visibleEntryValue)}</strong>
+                        {entryStatus === 'PAGO' ? (
+                          <button
+                            type="button"
+                            className="button small ghost"
+                            disabled={workingId === entryWorkingId}
+                            onClick={() => void handleUndoEntryPayment(match, member)}
+                          >
+                            Desfazer
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="button small"
+                            disabled={workingId === entryWorkingId}
+                            onClick={() => void handleConfirmEntryPayment(match, member)}
+                          >
+                            Confirmar entrada
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <button
-                type="button"
-                className="button small danger"
-                disabled={workingId === match.match_id}
-                onClick={() => void handleRemoveMatch(match)}
-              >
-                Remover
-              </button>
-              <button
-                type="button"
-                className="button small secondary"
-                disabled={workingId === match.match_id}
-                onClick={() => void handleCheckResult(match)}
-              >
-                Conferir resultado
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
