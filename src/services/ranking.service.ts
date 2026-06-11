@@ -45,7 +45,19 @@ async function listRankingFromWinners(poolId: UUID): Promise<Ranking[]> {
   }
 
   const membersById = new Map(members.map((member) => [member.user_id, member]));
-  const totalsByUserId = new Map<UUID, Ranking>();
+  const totalsByUserId = new Map<UUID, Ranking>(
+    members.map((member) => [
+      member.user_id,
+      {
+        pool_id: poolId,
+        user_id: member.user_id,
+        display_name: member.display_name,
+        avatar_url: member.avatar_url ?? null,
+        total_wins: 0,
+        total_gain: 0,
+      },
+    ]),
+  );
 
   for (const winner of data ?? []) {
     const userId = getString(winner, ['user_id', 'winner_user_id', 'member_id']);
@@ -66,7 +78,9 @@ async function listRankingFromWinners(poolId: UUID): Promise<Ranking[]> {
     totalsByUserId.set(userId, current);
   }
 
-  return [...totalsByUserId.values()].sort((a, b) => b.total_wins - a.total_wins || b.total_gain - a.total_gain);
+  return [...totalsByUserId.values()].sort(
+    (a, b) => b.total_gain - a.total_gain || b.total_wins - a.total_wins || a.display_name.localeCompare(b.display_name),
+  );
 }
 
 export async function listPoolRanking(poolId: UUID): Promise<Ranking[]> {

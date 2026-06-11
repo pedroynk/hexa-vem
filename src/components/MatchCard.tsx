@@ -5,7 +5,39 @@ import { GuessForm } from './GuessForm';
 type MatchCardProps = {
   match: PoolMatch;
   guess?: Guess;
+  guessesCount: number;
+  participantsCount: number;
   onSaveGuess: (matchId: string, homeGoals: number, awayGoals: number) => Promise<void>;
+};
+
+const teamFlags: Record<string, string> = {
+  brasil: '🇧🇷',
+  brazil: '🇧🇷',
+  mexico: '🇲🇽',
+  méxico: '🇲🇽',
+  'africa do sul': '🇿🇦',
+  'áfrica do sul': '🇿🇦',
+  'south africa': '🇿🇦',
+  'coreia do sul': '🇰🇷',
+  'south korea': '🇰🇷',
+  marrocos: '🇲🇦',
+  morocco: '🇲🇦',
+  'republica tcheca': '🇨🇿',
+  'república tcheca': '🇨🇿',
+  czechia: '🇨🇿',
+  argentina: '🇦🇷',
+  franca: '🇫🇷',
+  frança: '🇫🇷',
+  france: '🇫🇷',
+  alemanha: '🇩🇪',
+  germany: '🇩🇪',
+  espanha: '🇪🇸',
+  spain: '🇪🇸',
+  portugal: '🇵🇹',
+  inglaterra: '🇬🇧',
+  england: '🏴',
+  uruguai: '🇺🇾',
+  uruguay: '🇺🇾',
 };
 
 function formatScore(homeGoals?: number | null, awayGoals?: number | null): string {
@@ -14,9 +46,51 @@ function formatScore(homeGoals?: number | null, awayGoals?: number | null): stri
   return `${home} x ${away}`;
 }
 
-export function MatchCard({ match, guess, onSaveGuess }: MatchCardProps) {
+function normalizeTeamName(teamName: string): string {
+  return teamName
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function getTeamFlag(teamName: string): string {
+  const normalized = normalizeTeamName(teamName);
+  return teamFlags[teamName.trim().toLowerCase()] ?? teamFlags[normalized] ?? '🏳️';
+}
+
+function formatMatchTime(startDate: string): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(startDate));
+}
+
+function formatCloseTime(startDate: string): string {
+  const diffInMinutes = Math.ceil((new Date(startDate).getTime() - Date.now()) / 60_000);
+
+  if (diffInMinutes <= 0) {
+    return 'Fechado';
+  }
+
+  if (diffInMinutes < 60) {
+    return `Fecha em ${diffInMinutes} min`;
+  }
+
+  const diffInHours = Math.ceil(diffInMinutes / 60);
+
+  if (diffInHours < 24) {
+    return `Fecha em ${diffInHours} ${diffInHours === 1 ? 'hora' : 'horas'}`;
+  }
+
+  const diffInDays = Math.ceil(diffInHours / 24);
+  return `Fecha em ${diffInDays} ${diffInDays === 1 ? 'dia' : 'dias'}`;
+}
+
+export function MatchCard({ match, guess, guessesCount, participantsCount, onSaveGuess }: MatchCardProps) {
   const locked = hasMatchStarted(match.start_date) || match.status !== 'AGENDADO';
   const matchId = match.match_id ?? match.id;
+  const guessesLabel = participantsCount > 0 ? `${guessesCount}/${participantsCount}` : String(guessesCount);
 
   return (
     <article className="card match-card">
@@ -30,6 +104,24 @@ export function MatchCard({ match, guess, onSaveGuess }: MatchCardProps) {
           </h3>
         </div>
         <span className={`status status-${match.status.toLowerCase()}`}>{match.status}</span>
+      </div>
+
+      <span className={`match-deadline ${locked ? 'match-deadline-locked' : ''}`}>{formatCloseTime(match.start_date)}</span>
+
+      <div className="match-scoreboard" aria-label={`${match.home} contra ${match.away}`}>
+        <div className="match-team">
+          <span className="team-flag" aria-hidden="true">
+            {getTeamFlag(match.home)}
+          </span>
+          <strong>{match.home}</strong>
+        </div>
+        <span className="match-versus">x</span>
+        <div className="match-team">
+          <span className="team-flag" aria-hidden="true">
+            {getTeamFlag(match.away)}
+          </span>
+          <strong>{match.away}</strong>
+        </div>
       </div>
 
       <div className="match-grid">
@@ -54,6 +146,30 @@ export function MatchCard({ match, guess, onSaveGuess }: MatchCardProps) {
         <div>
           <span className="muted">Em disputa</span>
           <strong>{formatCurrency(match.prize_value ?? 0)}</strong>
+        </div>
+      </div>
+
+      <div className="match-info-grid">
+        <div>
+          <span className="match-info-icon" aria-hidden="true">
+            ◷
+          </span>
+          <span className="muted">Horário</span>
+          <strong>{formatMatchTime(match.start_date)}</strong>
+        </div>
+        <div>
+          <span className="match-info-icon" aria-hidden="true">
+            ⚔
+          </span>
+          <span className="muted">Confronto</span>
+          <strong>{match.phase}</strong>
+        </div>
+        <div>
+          <span className="match-info-icon" aria-hidden="true">
+            ◉
+          </span>
+          <span className="muted">Quem palpitou</span>
+          <strong>{guessesLabel}</strong>
         </div>
       </div>
 

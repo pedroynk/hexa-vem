@@ -45,6 +45,15 @@ export function PoolPage() {
     () => new Map(guesses.filter((guess) => guess.user_id === user?.id).map((guess) => [guess.match_id, guess])),
     [guesses, user?.id],
   );
+  const guessesCountByMatchId = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const guess of guesses) {
+      counts.set(guess.match_id, (counts.get(guess.match_id) ?? 0) + 1);
+    }
+
+    return counts;
+  }, [guesses]);
   const livePrizeValue = useMemo(() => {
     const paidTotal = members
       .filter((member) => member.status === 'PAGO')
@@ -146,7 +155,7 @@ export function PoolPage() {
   }, [poolId, user]);
 
   useEffect(() => {
-    if (visibleActiveTab !== 'ranking' || !poolId || rankingLoaded || rankingLoading) {
+    if (visibleActiveTab !== 'ranking' || !poolId || rankingLoaded) {
       return;
     }
 
@@ -177,7 +186,7 @@ export function PoolPage() {
     return () => {
       active = false;
     };
-  }, [poolId, rankingLoaded, rankingLoading, visibleActiveTab]);
+  }, [poolId, rankingLoaded, visibleActiveTab]);
 
   async function handleSaveGuess(matchId: string, homeGoals: number, awayGoals: number) {
     if (!poolId) {
@@ -246,6 +255,8 @@ export function PoolPage() {
               key={match.match_id ?? match.id}
               match={match}
               guess={guessesByMatchId.get(match.match_id ?? match.id)}
+              guessesCount={guessesCountByMatchId.get(match.match_id ?? match.id) ?? 0}
+              participantsCount={members.length}
               onSaveGuess={handleSaveGuess}
             />
           ))}

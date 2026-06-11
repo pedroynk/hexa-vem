@@ -27,6 +27,38 @@ FROM public.pool_members pm
 JOIN public.pools p ON p.id = pm.pool_id
 JOIN auth.users u ON u.id = pm.user_id;
 
+CREATE OR REPLACE VIEW public.v_pool_ranking AS
+SELECT
+  pm.pool_id,
+  pm.user_id,
+  COALESCE(
+    u.raw_user_meta_data ->> 'full_name',
+    u.raw_user_meta_data ->> 'name',
+    u.email,
+    'Usuario ' || LEFT(pm.user_id::TEXT, 8)
+  ) AS display_name,
+  COALESCE(
+    u.raw_user_meta_data ->> 'avatar_url',
+    u.raw_user_meta_data ->> 'picture'
+  ) AS avatar_url,
+  COUNT(w.user_id) AS total_wins,
+  COALESCE(SUM(w.gain_value), 0) AS total_gain
+FROM public.pool_members pm
+JOIN auth.users u ON u.id = pm.user_id
+LEFT JOIN public.pool_match_winners w
+  ON w.pool_id = pm.pool_id
+ AND w.user_id = pm.user_id
+WHERE pm.status <> 'REMOVIDO'
+GROUP BY
+  pm.pool_id,
+  pm.user_id,
+  display_name,
+  avatar_url
+ORDER BY
+  total_gain DESC,
+  total_wins DESC,
+  display_name ASC;
+
 GRANT SELECT ON public.v_pool_members TO authenticated;
 GRANT SELECT ON public.v_pool_matches TO authenticated;
 GRANT SELECT ON public.v_pool_ranking TO authenticated;

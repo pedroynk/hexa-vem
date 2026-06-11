@@ -3,7 +3,7 @@ import { formatCurrency } from '../utils/date';
 
 export function RankingTable({ ranking }: { ranking: Ranking[] }) {
   if (ranking.length === 0) {
-    return <div className="empty-state">O ranking ainda não tem vencedores.</div>;
+    return <div className="empty-state">O ranking ainda não tem participantes.</div>;
   }
 
   return (
