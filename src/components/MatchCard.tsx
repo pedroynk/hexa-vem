@@ -111,11 +111,18 @@ function formatHeadToHeadScore(match: HeadToHeadMatch): string {
   return `${home} x ${away}`;
 }
 
-function formatFlagScore(match: PoolMatch): string {
-  const homeGoals = match.home_goals ?? '-';
-  const awayGoals = match.away_goals ?? '-';
+function formatMatchStatus(status: PoolMatch['status']): string {
+  if (status === 'ENCERRADO') return 'Finalizado';
+  if (status === 'EM_ANDAMENTO') return 'Ao vivo';
+  if (status === 'CANCELADO') return 'Cancelado';
+  return 'Agendado';
+}
 
-  return `${getTeamFlag(match.home)} ${homeGoals} x ${awayGoals} ${getTeamFlag(match.away)}`;
+function formatPoolStatus(status?: string): string | null {
+  if (!status) return null;
+
+  const normalized = status.replaceAll('_', ' ').toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 export function MatchCard({
@@ -164,7 +171,7 @@ export function MatchCard({
 
   return (
     <article className="card match-card">
-      <div className="match-header">
+      <div className="match-card-top">
         <div>
           <p className="eyebrow">
             {match.championship} · {match.phase}
@@ -174,12 +181,10 @@ export function MatchCard({
           </h3>
         </div>
         <div className="match-header-statuses">
-          {match.pool_status ? <span className="pill pool-status-pill">{match.pool_status}</span> : null}
-          <span className={`status status-${match.status.toLowerCase()}`}>{match.status}</span>
+          <span className={`status status-${match.status.toLowerCase()}`}>{formatMatchStatus(match.status)}</span>
+          {formatPoolStatus(match.pool_status) ? <span className="pill pool-status-pill">{formatPoolStatus(match.pool_status)}</span> : null}
         </div>
       </div>
-
-      <span className={`match-deadline ${locked ? 'match-deadline-locked' : ''}`}>{formatCloseTime(match.start_date)}</span>
 
       <div className="match-scoreboard" aria-label={`${match.home} contra ${match.away}`}>
         <div className="match-team">
@@ -192,8 +197,11 @@ export function MatchCard({
           <span className="match-center-date">
             {formatMatchDate(match.start_date)} · {formatMatchTime(match.start_date)}
           </span>
-          <span className="match-versus">x</span>
-          <strong className="flag-score">{formatFlagScore(match)}</strong>
+          <strong className="main-score">
+            <span>{match.home_goals ?? '-'}</span>
+            <span className="score-separator">-</span>
+            <span>{match.away_goals ?? '-'}</span>
+          </strong>
         </div>
         <div className="match-team">
           <span className="team-flag" aria-hidden="true">
@@ -203,9 +211,8 @@ export function MatchCard({
         </div>
       </div>
 
-      {locked ? <div className="match-locked-banner">Palpites encerrados para este jogo.</div> : null}
-
       <div className="match-quick-summary">
+        <span>{locked ? 'Palpites encerrados' : formatCloseTime(match.start_date)}</span>
         <span>
           Entrada <strong className={userEntryStatus === 'PAGO' ? 'success-text' : 'warning-text'}>{userEntryStatus}</strong>
         </span>
@@ -213,14 +220,13 @@ export function MatchCard({
           Palpite <strong>{guess ? `${guess.home_goals} x ${guess.away_goals}` : 'Sem palpite'}</strong>
         </span>
         <span>
-          Período{' '}
-          <strong>
-            {match.period ?? '-'} {match.game_minute ? `${match.game_minute}'` : ''}
-          </strong>
+          Prêmio <strong>{formatCurrency(match.prize_value ?? 0)}</strong>
         </span>
-        <span>
-          Em disputa <strong>{formatCurrency(match.prize_value ?? 0)}</strong>
-        </span>
+        {match.period ? (
+          <span>
+            Tempo <strong>{match.period}</strong>
+          </span>
+        ) : null}
         {accumulatedValue > 0 ? (
           <span>
             Acumulado <strong>{formatCurrency(accumulatedValue)}</strong>
@@ -228,27 +234,15 @@ export function MatchCard({
         ) : null}
       </div>
 
-      <div className="match-info-grid">
-        <button type="button" className="match-info-action" onClick={() => window.open(getCazeTvUrl(match), '_blank', 'noopener,noreferrer')}>
-          <span className="match-info-icon" aria-hidden="true">
-            ◷
-          </span>
-          <span className="muted">Horário</span>
-          <strong>{formatMatchTime(match.start_date)}</strong>
+      <div className="match-action-row">
+        <button type="button" className="match-action-button" onClick={() => window.open(getCazeTvUrl(match), '_blank', 'noopener,noreferrer')}>
+          Assistir na CazéTV
         </button>
-        <button type="button" className="match-info-action" onClick={() => void handleToggleHeadToHead()}>
-          <span className="match-info-icon" aria-hidden="true">
-            ⚔
-          </span>
-          <span className="muted">Confronto</span>
-          <strong>{match.phase}</strong>
+        <button type="button" className="match-action-button" onClick={() => void handleToggleHeadToHead()}>
+          Histórico
         </button>
-        <button type="button" className="match-info-action" onClick={() => setShowGuesses((currentValue) => !currentValue)}>
-          <span className="match-info-icon" aria-hidden="true">
-            ◉
-          </span>
-          <span className="muted">Quem palpitou</span>
-          <strong>{guessesLabel}</strong>
+        <button type="button" className="match-action-button" onClick={() => setShowGuesses((currentValue) => !currentValue)}>
+          Palpites {guessesLabel}
         </button>
       </div>
 
@@ -284,25 +278,25 @@ export function MatchCard({
         </div>
       ) : null}
 
-      <GuessForm
-        key={`${matchId}-${guess?.home_goals ?? ''}-${guess?.away_goals ?? ''}`}
-        guess={guess}
-        disabled={locked}
-        onSubmit={(homeGoals, awayGoals) => onSaveGuess(matchId, homeGoals, awayGoals)}
-      />
-
       {finished ? (
-        <div className={`match-result-box ${currentUserWinner ? 'match-result-win' : 'match-result-loss'}`}>
-          <div>
-            <span className="muted">Seu resultado</span>
-            <strong>
+        <div className={`user-outcome-card ${currentUserWinner ? 'user-outcome-win' : 'user-outcome-loss'}`}>
+          <div className="user-outcome-copy">
+            <span className="muted">Resultado do seu palpite</span>
+            <strong>{guess ? `${guess.home_goals} x ${guess.away_goals}` : 'Sem palpite'}</strong>
+            <p>
               {currentUserWinner
-                ? `Você ganhou ${formatCurrency(currentUserWinner.gain_value)}`
+                ? 'Você acertou o placar e levou o prêmio.'
                 : guess
-                  ? 'Você perdeu este jogo.'
+                  ? 'Não foi dessa vez.'
                   : 'Você não palpitou neste jogo.'}
-            </strong>
+            </p>
           </div>
+          {currentUserWinner ? (
+            <div className="user-outcome-prize">
+              <span>Você ganhou</span>
+              <strong>{formatCurrency(currentUserWinner.gain_value)}</strong>
+            </div>
+          ) : null}
           {winners.length > 0 ? (
             <button type="button" className="button small ghost" onClick={() => setShowWinners((currentValue) => !currentValue)}>
               {showWinners ? 'Ocultar vencedores' : 'Ver vencedores'}
@@ -322,7 +316,14 @@ export function MatchCard({
             </div>
           ) : null}
         </div>
-      ) : null}
+      ) : (
+        <GuessForm
+          key={`${matchId}-${guess?.home_goals ?? ''}-${guess?.away_goals ?? ''}`}
+          guess={guess}
+          disabled={locked}
+          onSubmit={(homeGoals, awayGoals) => onSaveGuess(matchId, homeGoals, awayGoals)}
+        />
+      )}
     </article>
   );
 }
