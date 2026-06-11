@@ -47,12 +47,6 @@ const teamFlags: Record<string, string> = {
   uruguay: '🇺🇾',
 };
 
-function formatScore(homeGoals?: number | null, awayGoals?: number | null): string {
-  const home = homeGoals ?? '-';
-  const away = awayGoals ?? '-';
-  return `${home} x ${away}`;
-}
-
 function normalizeTeamName(teamName: string): string {
   return teamName
     .trim()
@@ -70,6 +64,14 @@ function formatMatchTime(startDate: string): string {
   return new Intl.DateTimeFormat('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
+  }).format(new Date(startDate));
+}
+
+function formatMatchDate(startDate: string): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
   }).format(new Date(startDate));
 }
 
@@ -107,6 +109,13 @@ function formatHeadToHeadScore(match: HeadToHeadMatch): string {
   const away = match.away_goals ?? '-';
 
   return `${home} x ${away}`;
+}
+
+function formatFlagScore(match: PoolMatch): string {
+  const homeGoals = match.home_goals ?? '-';
+  const awayGoals = match.away_goals ?? '-';
+
+  return `${getTeamFlag(match.home)} ${homeGoals} x ${awayGoals} ${getTeamFlag(match.away)}`;
 }
 
 export function MatchCard({
@@ -164,7 +173,10 @@ export function MatchCard({
             {match.home} x {match.away}
           </h3>
         </div>
-        <span className={`status status-${match.status.toLowerCase()}`}>{match.status}</span>
+        <div className="match-header-statuses">
+          {match.pool_status ? <span className="pill pool-status-pill">{match.pool_status}</span> : null}
+          <span className={`status status-${match.status.toLowerCase()}`}>{match.status}</span>
+        </div>
       </div>
 
       <span className={`match-deadline ${locked ? 'match-deadline-locked' : ''}`}>{formatCloseTime(match.start_date)}</span>
@@ -176,7 +188,13 @@ export function MatchCard({
           </span>
           <strong>{match.home}</strong>
         </div>
-        <span className="match-versus">x</span>
+        <div className="match-center-score">
+          <span className="match-center-date">
+            {formatMatchDate(match.start_date)} · {formatMatchTime(match.start_date)}
+          </span>
+          <span className="match-versus">x</span>
+          <strong className="flag-score">{formatFlagScore(match)}</strong>
+        </div>
         <div className="match-team">
           <span className="team-flag" aria-hidden="true">
             {getTeamFlag(match.away)}
@@ -206,22 +224,10 @@ export function MatchCard({
 
       <div className="match-grid">
         <div>
-          <span className="muted">Data</span>
-          <strong>{formatDateTime(match.start_date)}</strong>
-        </div>
-        <div>
-          <span className="muted">Placar atual</span>
-          <strong>{formatScore(match.home_goals, match.away_goals)}</strong>
-        </div>
-        <div>
           <span className="muted">Período</span>
           <strong>
             {match.period ?? '-'} {match.game_minute ? `${match.game_minute}'` : ''}
           </strong>
-        </div>
-        <div>
-          <span className="muted">Status do bolão</span>
-          <strong>{match.pool_status ?? '-'}</strong>
         </div>
         <div>
           <span className="muted">Em disputa</span>
