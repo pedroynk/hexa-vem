@@ -62,6 +62,14 @@ const teamSearchAliases: Record<string, string> = {
   austria: 'Austria',
   áustria: 'Austria',
 };
+const knownTeamIds: Record<string, string> = {
+  brazil: '134496',
+  brasil: '134496',
+  mexico: '134497',
+  méxico: '134497',
+  morocco: '136139',
+  marrocos: '136139',
+};
 
 function firstQueryValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -114,6 +122,12 @@ async function fetchJson<T>(url: string): Promise<T> {
 
 async function findTeamId(apiKey: string, teamName: string): Promise<string | null> {
   const searchName = getTeamSearchName(teamName);
+  const knownTeamId = knownTeamIds[teamName.trim().toLowerCase()] ?? knownTeamIds[normalizeSearchTerm(teamName)] ?? knownTeamIds[normalizeSearchTerm(searchName)];
+
+  if (knownTeamId) {
+    return knownTeamId;
+  }
+
   const payload = await fetchJson<TheSportsDbTeamResponse>(
     `${THE_SPORTS_DB_BASE_URL}/${apiKey}/searchteams.php?t=${encodeURIComponent(searchName)}`,
   );

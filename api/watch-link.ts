@@ -41,6 +41,15 @@ const teamPortugueseNames: Record<string, string> = {
   austria: 'ÁUSTRIA',
   áustria: 'ÁUSTRIA',
 };
+const knownWatchLinks: Record<string, string> = {
+  'brasil|marrocos': 'https://www.youtube.com/watch?v=vC3fV_awcWE',
+  'brazil|morocco': 'https://www.youtube.com/watch?v=vC3fV_awcWE',
+  'brasil|haiti': 'https://www.youtube.com/watch?v=DUuWdi0r1RI',
+  'brazil|haiti': 'https://www.youtube.com/watch?v=DUuWdi0r1RI',
+  'brasil|escocia': 'https://www.youtube.com/watch?v=dxYTTxhgVNU',
+  'brasil|escócia': 'https://www.youtube.com/watch?v=dxYTTxhgVNU',
+  'brazil|scotland': 'https://www.youtube.com/watch?v=dxYTTxhgVNU',
+};
 
 function firstQueryValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -64,6 +73,13 @@ function getCazeTvQuery(home: string, away: string): string {
 
 function getSearchUrl(query: string): string {
   return `https://www.youtube.com/@CazeTV/search?${new URLSearchParams({ query }).toString()}`;
+}
+
+function getKnownWatchLink(home: string, away: string): string | null {
+  const homeTerm = normalizeSearchTerm(home);
+  const awayTerm = normalizeSearchTerm(away);
+
+  return knownWatchLinks[`${homeTerm}|${awayTerm}`] ?? knownWatchLinks[`${awayTerm}|${homeTerm}`] ?? null;
 }
 
 async function findYouTubeVideoUrl(query: string, apiKey: string): Promise<string | null> {
@@ -118,7 +134,13 @@ export default async function handler(request: ApiRequest, response: ApiResponse
 
   const query = getCazeTvQuery(home, away);
   const fallbackUrl = getSearchUrl(query);
+  const knownWatchLink = getKnownWatchLink(home, away);
   const youtubeApiKey = process.env.YOUTUBE_API_KEY;
+
+  if (knownWatchLink) {
+    response.status(200).json({ url: knownWatchLink, query, direct: true });
+    return;
+  }
 
   if (!youtubeApiKey) {
     response.status(200).json({ url: fallbackUrl, query, direct: false });
