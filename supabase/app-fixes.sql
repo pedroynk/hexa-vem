@@ -613,6 +613,14 @@ BEGIN
     RAISE EXCEPTION 'Participante não encontrado ou já removido.';
   END IF;
 
+  DELETE FROM public.guesses
+  WHERE pool_id = p_pool_id
+    AND user_id = p_user_id;
+
+  DELETE FROM public.pool_match_winners
+  WHERE pool_id = p_pool_id
+    AND user_id = p_user_id;
+
   FOR v_match_id IN
     SELECT pme.match_id
     FROM public.pool_match_entries pme

@@ -12,6 +12,7 @@ type AdminPanelProps = {
   poolMatches: PoolMatch[];
   onMembersChanged: () => Promise<void>;
   onMatchesChanged: () => Promise<void>;
+  onGuessesChanged: () => Promise<void>;
   onWinnersChanged: () => Promise<void>;
 };
 
@@ -27,7 +28,7 @@ function getActionErrorMessage(error: unknown): string {
   return 'Erro ao executar ação.';
 }
 
-export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMatchesChanged, onWinnersChanged }: AdminPanelProps) {
+export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMatchesChanged, onGuessesChanged, onWinnersChanged }: AdminPanelProps) {
   const { user } = useAuth();
   const [matches, setMatches] = useState<Match[]>([]);
   const [matchEntries, setMatchEntries] = useState<PoolMatchEntry[]>([]);
@@ -149,7 +150,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
       async () => {
         await removePoolMember(pool.id, member.user_id);
         setTemporarilyRemovedUserIds((currentIds) => new Set(currentIds).add(member.user_id));
-        await onMatchesChanged();
+        await Promise.all([refreshMatchEntries(), onMembersChanged(), onMatchesChanged(), onGuessesChanged(), onWinnersChanged()]);
       },
       'Participante removido.',
     );
@@ -165,7 +166,7 @@ export function AdminPanel({ pool, members, poolMatches, onMembersChanged, onMat
           nextIds.delete(member.user_id);
           return nextIds;
         });
-        await Promise.all([onMembersChanged(), onMatchesChanged()]);
+        await Promise.all([refreshMatchEntries(), onMembersChanged(), onMatchesChanged(), onGuessesChanged(), onWinnersChanged()]);
       },
       'Remoção desfeita.',
     );

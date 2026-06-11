@@ -293,6 +293,7 @@ export function PoolPage() {
           poolMatches={matchesWithPrize}
           onMembersChanged={refreshMembers}
           onMatchesChanged={refreshMatches}
+          onGuessesChanged={refreshGuesses}
           onWinnersChanged={refreshWinners}
         />
       ) : null}
