@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import syncMatchesHandler from './api/sync-matches';
 import checkMatchResultHandler from './api/check-match-result';
 import headToHeadHandler from './api/head-to-head';
+import watchLinkHandler from './api/watch-link';
 
 type LocalHandler = typeof syncMatchesHandler;
 
@@ -52,6 +53,7 @@ function localApiPlugin(): Plugin {
       registerJsonApiRoute(server, '/api/sync-matches', syncMatchesHandler);
       registerJsonApiRoute(server, '/api/check-match-result', checkMatchResultHandler);
       registerJsonApiRoute(server, '/api/head-to-head', headToHeadHandler);
+      registerJsonApiRoute(server, '/api/watch-link', watchLinkHandler);
     },
   };
 }

@@ -630,26 +630,43 @@ h3 {
 
 .match-action-row {
   display: flex;
-  gap: 0.55rem;
+  justify-content: center;
+  gap: 0.9rem;
   flex-wrap: wrap;
+  padding: 0.25rem 0;
 }
 
 .match-action-button {
-  border: 1px solid rgba(255, 213, 0, 0.26);
+  min-width: 190px;
+  border: 1px solid rgba(255, 213, 0, 0.42);
   border-radius: 999px;
-  padding: 0.58rem 0.85rem;
-  background: rgba(255, 255, 255, 0.07);
-  color: inherit;
+  padding: 0.82rem 1.1rem;
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
   cursor: pointer;
-  font-weight: 850;
+  font-size: 1rem;
+  font-weight: 950;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
   transition:
     background 0.2s ease,
+    border-color 0.2s ease,
     transform 0.2s ease;
 }
 
 .match-action-button:hover {
-  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 213, 0, 0.72);
+  background: rgba(255, 255, 255, 0.15);
   transform: translateY(-1px);
+}
+
+.match-action-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
+}
+
+.match-action-primary {
+  background: linear-gradient(135deg, rgba(255, 213, 0, 0.28), rgba(0, 157, 79, 0.2));
 }
 
 .match-panel {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { listHeadToHeadMatches } from '../services/head-to-head.service';
+import { getWatchLink } from '../services/watch-link.service';
 import type { Guess, HeadToHeadMatch, PoolMatch, PoolMatchEntry, PoolMatchGuess, PoolMatchWinner, UUID } from '../types';
 import { formatCurrency, formatDateTime, hasMatchStarted } from '../utils/date';
 import { GuessForm } from './GuessForm';
@@ -96,14 +97,6 @@ function formatCloseTime(startDate: string): string {
   return `Fecha em ${diffInDays} ${diffInDays === 1 ? 'dia' : 'dias'}`;
 }
 
-function getCazeTvUrl(match: PoolMatch): string {
-  const query = new URLSearchParams({
-    query: `CazéTV ${match.home} x ${match.away} ${match.championship}`,
-  });
-
-  return `https://www.youtube.com/@CazeTV/search?${query.toString()}`;
-}
-
 function formatHeadToHeadScore(match: HeadToHeadMatch): string {
   const home = match.home_goals ?? '-';
   const away = match.away_goals ?? '-';
@@ -143,6 +136,7 @@ export function MatchCard({
   const [headToHeadMatches, setHeadToHeadMatches] = useState<HeadToHeadMatch[]>([]);
   const [headToHeadLoading, setHeadToHeadLoading] = useState(false);
   const [headToHeadError, setHeadToHeadError] = useState<string | null>(null);
+  const [watchLinkLoading, setWatchLinkLoading] = useState(false);
   const locked = hasMatchStarted(match.start_date) || match.status !== 'AGENDADO';
   const matchId = match.match_id ?? match.id;
   const guessesLabel = participantsCount > 0 ? `${guessesCount}/${participantsCount}` : String(guessesCount);
@@ -166,6 +160,20 @@ export function MatchCard({
       setHeadToHeadError(error instanceof Error ? error.message : 'Erro ao carregar confrontos.');
     } finally {
       setHeadToHeadLoading(false);
+    }
+  }
+
+  async function handleOpenWatchLink() {
+    try {
+      setWatchLinkLoading(true);
+      window.open(await getWatchLink(match.home, match.away), '_blank', 'noopener,noreferrer');
+    } catch {
+      const fallbackQuery = new URLSearchParams({
+        query: `AO VIVO: ${match.home.toUpperCase()} X ${match.away.toUpperCase()} | COPA DO MUNDO FIFA™ 2026`,
+      });
+      window.open(`https://www.youtube.com/@CazeTV/search?${fallbackQuery.toString()}`, '_blank', 'noopener,noreferrer');
+    } finally {
+      setWatchLinkLoading(false);
     }
   }
 
@@ -235,8 +243,8 @@ export function MatchCard({
       </div>
 
       <div className="match-action-row">
-        <button type="button" className="match-action-button" onClick={() => window.open(getCazeTvUrl(match), '_blank', 'noopener,noreferrer')}>
-          Assistir na CazéTV
+        <button type="button" className="match-action-button match-action-primary" disabled={watchLinkLoading} onClick={() => void handleOpenWatchLink()}>
+          {watchLinkLoading ? 'Buscando transmissão...' : 'Assistir na CazéTV'}
         </button>
         <button type="button" className="match-action-button" onClick={() => void handleToggleHeadToHead()}>
           Histórico
