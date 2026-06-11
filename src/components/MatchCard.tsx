@@ -205,34 +205,27 @@ export function MatchCard({
 
       {locked ? <div className="match-locked-banner">Palpites encerrados para este jogo.</div> : null}
 
-      <div className="user-match-state">
-        <div>
-          <span className="muted">Sua entrada</span>
-          <strong className={userEntryStatus === 'PAGO' ? 'success-text' : 'warning-text'}>{userEntryStatus}</strong>
-        </div>
-        <div>
-          <span className="muted">Seu palpite</span>
-          <strong>{guess ? `${guess.home_goals} x ${guess.away_goals}` : 'Sem palpite'}</strong>
-        </div>
-        {accumulatedValue > 0 ? (
-          <div>
-            <span className="muted">Acumulado anterior</span>
-            <strong>{formatCurrency(accumulatedValue)}</strong>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="match-grid">
-        <div>
-          <span className="muted">Período</span>
+      <div className="match-quick-summary">
+        <span>
+          Entrada <strong className={userEntryStatus === 'PAGO' ? 'success-text' : 'warning-text'}>{userEntryStatus}</strong>
+        </span>
+        <span>
+          Palpite <strong>{guess ? `${guess.home_goals} x ${guess.away_goals}` : 'Sem palpite'}</strong>
+        </span>
+        <span>
+          Período{' '}
           <strong>
             {match.period ?? '-'} {match.game_minute ? `${match.game_minute}'` : ''}
           </strong>
-        </div>
-        <div>
-          <span className="muted">Em disputa</span>
-          <strong>{formatCurrency(match.prize_value ?? 0)}</strong>
-        </div>
+        </span>
+        <span>
+          Em disputa <strong>{formatCurrency(match.prize_value ?? 0)}</strong>
+        </span>
+        {accumulatedValue > 0 ? (
+          <span>
+            Acumulado <strong>{formatCurrency(accumulatedValue)}</strong>
+          </span>
+        ) : null}
       </div>
 
       <div className="match-info-grid">
