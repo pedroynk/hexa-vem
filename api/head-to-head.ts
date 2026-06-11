@@ -53,6 +53,10 @@ const teamSearchAliases: Record<string, string> = {
   méxico: 'Mexico',
   marrocos: 'Morocco',
   morocco: 'Morocco',
+  haiti: 'Haiti',
+  escocia: 'Scotland',
+  escócia: 'Scotland',
+  scotland: 'Scotland',
   'africa do sul': 'South Africa',
   'áfrica do sul': 'South Africa',
   'south africa': 'South Africa',
@@ -69,6 +73,94 @@ const knownTeamIds: Record<string, string> = {
   méxico: '134497',
   morocco: '136139',
   marrocos: '136139',
+};
+const curatedHeadToHeadMatches: Record<string, HeadToHeadMatch[]> = {
+  'brazil|morocco': [
+    {
+      id: 'curated-morocco-brazil-2023-03-25',
+      home: 'Morocco',
+      away: 'Brazil',
+      home_goals: 2,
+      away_goals: 1,
+      start_date: '2023-03-25T22:00:00.000Z',
+      league: 'International Friendly',
+      season: '2023',
+    },
+  ],
+  'brazil|haiti': [
+    {
+      id: 'curated-brazil-haiti-2016-06-09',
+      home: 'Brazil',
+      away: 'Haiti',
+      home_goals: 7,
+      away_goals: 1,
+      start_date: '2016-06-09T00:30:00.000Z',
+      league: 'Copa América Centenario',
+      season: '2016',
+    },
+    {
+      id: 'curated-haiti-brazil-2004-08-18',
+      home: 'Haiti',
+      away: 'Brazil',
+      home_goals: 0,
+      away_goals: 6,
+      start_date: '2004-08-18T00:00:00.000Z',
+      league: 'International Friendly',
+      season: '2004',
+    },
+  ],
+  'brazil|scotland': [
+    {
+      id: 'curated-brazil-scotland-2011-03-27',
+      home: 'Brazil',
+      away: 'Scotland',
+      home_goals: 2,
+      away_goals: 0,
+      start_date: '2011-03-27T00:00:00.000Z',
+      league: 'International Friendly',
+      season: '2011',
+    },
+    {
+      id: 'curated-brazil-scotland-1998-06-10',
+      home: 'Brazil',
+      away: 'Scotland',
+      home_goals: 2,
+      away_goals: 1,
+      start_date: '1998-06-10T00:00:00.000Z',
+      league: 'FIFA World Cup',
+      season: '1998',
+    },
+    {
+      id: 'curated-brazil-scotland-1990-06-20',
+      home: 'Brazil',
+      away: 'Scotland',
+      home_goals: 1,
+      away_goals: 0,
+      start_date: '1990-06-20T00:00:00.000Z',
+      league: 'FIFA World Cup',
+      season: '1990',
+    },
+    {
+      id: 'curated-brazil-scotland-1982-06-18',
+      home: 'Brazil',
+      away: 'Scotland',
+      home_goals: 4,
+      away_goals: 1,
+      start_date: '1982-06-18T00:00:00.000Z',
+      league: 'FIFA World Cup',
+      season: '1982',
+    },
+    {
+      id: 'curated-brazil-scotland-1974-06-18',
+      home: 'Brazil',
+      away: 'Scotland',
+      home_goals: 0,
+      away_goals: 0,
+      start_date: '1974-06-18T00:00:00.000Z',
+      league: 'FIFA World Cup',
+      season: '1974',
+    },
+  ],
 };
 
 function firstQueryValue(value: string | string[] | undefined): string | undefined {
@@ -92,6 +184,18 @@ function normalizeSearchTerm(value: string): string {
 
 function getTeamSearchName(teamName: string): string {
   return teamSearchAliases[teamName.trim().toLowerCase()] ?? teamSearchAliases[normalizeSearchTerm(teamName)] ?? teamName;
+}
+
+function getTeamKey(teamName: string): string {
+  return normalizeSearchTerm(getTeamSearchName(teamName));
+}
+
+function getPairKey(home: string, away: string): string {
+  return [getTeamKey(home), getTeamKey(away)].sort().join('|');
+}
+
+function getCuratedHeadToHeadMatches(home: string, away: string): HeadToHeadMatch[] {
+  return curatedHeadToHeadMatches[getPairKey(home, away)] ?? [];
 }
 
 function getStartDate(event: TheSportsDbEvent): string {
@@ -219,10 +323,15 @@ export default async function handler(request: ApiRequest, response: ApiResponse
     for (const event of [...teamIdEvents, ...seasonEvents]) {
       eventsById.set(event.idEvent ?? `${event.strHomeTeam}-${event.strAwayTeam}-${event.strTimestamp ?? event.dateEvent ?? ''}`, event);
     }
+    const apiMatches = [...eventsById.values()].map(mapEvent);
+    const matchesById = new Map<string, HeadToHeadMatch>();
+
+    for (const match of [...apiMatches, ...getCuratedHeadToHeadMatches(home, away)]) {
+      matchesById.set(match.id, match);
+    }
 
     response.status(200).json({
-      matches: [...eventsById.values()]
-        .map(mapEvent)
+      matches: [...matchesById.values()]
         .sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())
         .slice(0, 8),
     });
