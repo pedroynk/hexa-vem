@@ -53,11 +53,11 @@ type TheSportsDbResponse = {
 };
 
 const THE_SPORTS_DB_BASE_URL = 'https://www.thesportsdb.com/api/v1/json';
-const DEFAULT_THE_SPORTS_DB_TARGET_TEAM_ID = '134497';
-const DEFAULT_THE_SPORTS_DB_TEAM_NAME = 'Mexico';
+const DEFAULT_THE_SPORTS_DB_TARGET_TEAM_ID = '134496';
+const DEFAULT_THE_SPORTS_DB_TEAM_NAME = 'Brazil';
 const DEFAULT_THE_SPORTS_DB_WORLD_CUP_LEAGUE_ID = '4429';
 const DEFAULT_THE_SPORTS_DB_WORLD_CUP_SEASON = '2026';
-const DEFAULT_THE_SPORTS_DB_TEAM_ALIASES = ['Mexico', 'México'];
+const DEFAULT_THE_SPORTS_DB_TEAM_ALIASES = ['Brazil', 'Brasil'];
 
 function firstQueryValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
