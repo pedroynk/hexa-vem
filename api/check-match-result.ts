@@ -1,5 +1,7 @@
+/// <reference types="node" />
+
 import { createClient } from '@supabase/supabase-js';
-import type { Json, MatchStatus, UUID } from '../src/types';
+import type { Json, MatchStatus, UUID } from '../src/types.js';
 
 type ApiRequest = {
   method?: string;
